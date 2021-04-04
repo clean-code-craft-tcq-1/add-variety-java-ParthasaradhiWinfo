@@ -1,87 +1,58 @@
 package TypewiseAlert;
 
-public class TypewiseAlert 
-{
-    public enum BreachType {
-      NORMAL,
-      TOO_LOW,
-      TOO_HIGH
-    };
-    public static BreachType inferBreach(double value, double lowerLimit, double upperLimit) {
-      if(value < lowerLimit) {
-        return BreachType.TOO_LOW;
-      }
-      if(value > upperLimit) {
-        return BreachType.TOO_HIGH;
-      }
-      return BreachType.NORMAL;
-    }
-    public enum CoolingType {
-      PASSIVE_COOLING,
-      HI_ACTIVE_COOLING,
-      MED_ACTIVE_COOLING
-    };
-    public static BreachType classifyTemperatureBreach(
-        CoolingType coolingType, double temperatureInC) {
-      int lowerLimit = 0;
-      int upperLimit = 0;
-      switch(coolingType) {
-        case PASSIVE_COOLING:
-          lowerLimit = 0;
-          upperLimit = 35;
-          break;
-        case HI_ACTIVE_COOLING:
-          lowerLimit = 0;
-          upperLimit = 45;
-          break;
-        case MED_ACTIVE_COOLING:
-          lowerLimit = 0;
-          upperLimit = 40;
-          break;
-      }
-      return inferBreach(temperatureInC, lowerLimit, upperLimit);
-    }
-    public enum AlertTarget{
-      TO_CONTROLLER,
-      TO_EMAIL
-    };
-    public class BatteryCharacter {
-      public CoolingType coolingType;
-      public String brand;
-    }
-    public static void checkAndAlert(
-        AlertTarget alertTarget, BatteryCharacter batteryChar, double temperatureInC) {
+import java.util.HashMap;
+import java.util.Map;
 
-      BreachType breachType = classifyTemperatureBreach(
-        batteryChar.coolingType, temperatureInC
-      );
+import TypewiseAlert.alert.Alert;
+import TypewiseAlert.alert.AlertTargetType;
+import TypewiseAlert.alert.EmailAlerts;
+import TypewiseAlert.alert.ToController;
+import TypewiseAlert.breach.BreachStrategy;
+import TypewiseAlert.breach.BreachType;
+import TypewiseAlert.cooling.Cooling;
+import TypewiseAlert.cooling.CoolingType;
+import TypewiseAlert.cooling.HIActiveCooling;
+import TypewiseAlert.cooling.MidActiveCooling;
+import TypewiseAlert.cooling.PassiveCooling;
 
-      switch(alertTarget) {
-        case TO_CONTROLLER:
-          sendToController(breachType);
-          break;
-        case TO_EMAIL:
-          sendToEmail(breachType);
-          break;
-      }
-    }
-    public static void sendToController(BreachType breachType) {
-      int header = 0xfeed;
-      System.out.printf("%i : %i\n", header, breachType);
-    }
-    public static void sendToEmail(BreachType breachType) {
-      String recepient = "a.b@c.com";
-      switch(breachType) {
-        case TOO_LOW:
-          System.out.printf("To: %s\n", recepient);
-          System.out.println("Hi, the temperature is too low\n");
-          break;
-        case TOO_HIGH:
-          System.out.printf("To: %s\n", recepient);
-          System.out.println("Hi, the temperature is too high\n");
-          break;
-        case NORMAL:
-          break;
-      }
-    }
+public class TypewiseAlert {
+
+	private BreachStrategy breachStrategy;
+
+	private Map<CoolingType, Cooling> coolingMap = new HashMap<>();
+
+	private Map<AlertTargetType, Alert> alertMap = new HashMap<>();
+
+	public TypewiseAlert(BreachStrategy breachStrategy) {
+		this.breachStrategy = breachStrategy;
+
+		this.coolingMap.put(CoolingType.PASSIVE_COOLING, new Cooling(new PassiveCooling(breachStrategy)));
+		this.coolingMap.put(CoolingType.HI_ACTIVE_COOLING, new Cooling(new HIActiveCooling(breachStrategy)));
+		this.coolingMap.put(CoolingType.MED_ACTIVE_COOLING, new Cooling(new MidActiveCooling(breachStrategy)));
+
+		this.alertMap.put(AlertTargetType.TO_CONTROLLER, new Alert(new ToController()));
+		this.alertMap.put(AlertTargetType.TO_EMAIL, new Alert(new EmailAlerts()));
+	}
+
+	public BreachType inferBreach(double value, double lowerLimit, double upperLimit) {
+
+		return breachStrategy.limitType(value, lowerLimit, upperLimit);
+
+	}
+
+	public BreachType classifyTemperatureBreach(CoolingType coolingType, double temperatureInC) {
+
+		return this.coolingMap.get(coolingType).executeCoolingStrategy(temperatureInC);
+	}
+
+	public class BatteryCharacter {
+		public CoolingType coolingType;
+		public String brand;
+	}
+
+	public void checkAndAlert(AlertTargetType alertTarget, BatteryCharacter batteryChar, double temperatureInC) {
+
+		BreachType breachType = classifyTemperatureBreach(batteryChar.coolingType, temperatureInC);
+		this.alertMap.get(alertTarget).executeAlertStrategry(breachType);
+	}
 }
